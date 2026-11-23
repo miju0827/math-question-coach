@@ -362,7 +362,7 @@ async function showSession(id) {
     body = `<div class="err">${esc(se.error)}</div>
       <div class="row" style="margin:10px 0"><button class="btn primary" id="retry">다시 시도</button></div>`;
   }
-  if (a) body += renderAnalysis(a);
+  if (a) body += renderAnalysis(a, se.timing);
 
   view.innerHTML = `
     <div class="muted">${se.day} ${timeOf(se.createdAt)} · 녹음 ${mmss(se.durationSec || 0)} · ${esc(st?.grade || '')}</div>
@@ -413,14 +413,14 @@ async function showSession(id) {
   };
 }
 
-function renderAnalysis(a) {
+function renderAnalysis(a, timing) {
   const list = (arr, fn) => (arr && arr.length ? arr.map(fn).join('') : '');
   return `
     <div class="card">
       <h3 style="margin-top:0">무엇을 물었나</h3>
       <p style="margin:0">${esc(a.summary)}</p>
       <div style="margin-top:6px">${(a.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join('')}
-        <span class="muted">분석 확신도: ${esc(a.confidence)}${se.timing ? ' · 걸린 시간 ' + [se.timing.stt != null ? '받아쓰기 ' + Math.round(se.timing.stt / 1000) + '초' : '', se.timing.analysis != null ? '분석 ' + Math.round(se.timing.analysis / 1000) + '초' : ''].filter(Boolean).join(', ') : ''}</span></div>
+        <span class="muted">분석 확신도: ${esc(a.confidence)}${timing ? ' · 걸린 시간 ' + [timing.stt != null ? '받아쓰기 ' + Math.round(timing.stt / 1000) + '초' : '', timing.analysis != null ? '분석 ' + Math.round(timing.analysis / 1000) + '초' : ''].filter(Boolean).join(', ') : ''}</span></div>
     </div>
     <div class="card">
       <h3 style="margin-top:0">약점</h3>
