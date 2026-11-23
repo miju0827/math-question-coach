@@ -250,7 +250,7 @@ async function showRecord(studentId) {
       return;
     }
     const mime = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg'].find(t => window.MediaRecorder && MediaRecorder.isTypeSupported(t)) || '';
-    recorder = new MediaRecorder(stream, mime ? { mimeType: mime, audioBitsPerSecond: 64000 } : undefined);
+    recorder = new MediaRecorder(stream, mime ? { mimeType: mime, audioBitsPerSecond: 24000 } : undefined);
     chunks = [];
     recorder.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
     recorder.onstop = async () => {
@@ -317,7 +317,9 @@ async function runPipeline(id, { force } = {}) {
       const audio = await db.get('audio', id);
       if (!audio) throw new Error('녹음 파일이 없어 받아쓸 수 없어요.');
       se.stage = 'transcribing'; await db.put('sessions', se); refreshIfShowing(id);
+      const t0 = Date.now();
       se.transcript = await transcribe(audio.blob, settings);
+      se.timing = { ...(se.timing || {}), stt: Date.now() - t0 };
       await db.put('sessions', se);
     }
     if (!se.analysis || force) {
@@ -325,8 +327,10 @@ async function runPipeline(id, { force } = {}) {
       const past = (await db.byIndex('sessions', 'studentId', se.studentId))
         .filter(x => x.id !== id && x.analysis).sort((a, b) => b.createdAt - a.createdAt).slice(0, 6)
         .map(x => ({ date: x.day, unit: x.analysis.unit, points: (x.analysis.weaknesses || []).map(w => w.point) }));
+      const t1 = Date.now();
       se.analysis = await analyze({ transcript: se.transcript, studentCode: st?.code || '학생', grade: st?.grade || '', level: st?.level || '', history: past }, settings);
       se.analyzedAt = Date.now();
+      se.timing = { ...(se.timing || {}), analysis: se.analyzedAt - t1, model: settings.claudeModel, effort: settings.effort };
     }
     se.stage = null; se.error = null;
     await db.put('sessions', se);
@@ -416,7 +420,7 @@ function renderAnalysis(a) {
       <h3 style="margin-top:0">무엇을 물었나</h3>
       <p style="margin:0">${esc(a.summary)}</p>
       <div style="margin-top:6px">${(a.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join('')}
-        <span class="muted">분석 확신도: ${esc(a.confidence)}</span></div>
+        <span class="muted">분석 확신도: ${esc(a.confidence)}${se.timing ? ' · 걸린 시간 ' + [se.timing.stt != null ? '받아쓰기 ' + Math.round(se.timing.stt / 1000) + '초' : '', se.timing.analysis != null ? '분석 ' + Math.round(se.timing.analysis / 1000) + '초' : ''].filter(Boolean).join(', ') : ''}</span></div>
     </div>
     <div class="card">
       <h3 style="margin-top:0">약점</h3>
@@ -534,7 +538,7 @@ function showSettings() {
       <label for="cm">분석 모델</label>
       <select id="cm">
         <option value="claude-opus-5-5">Claude Opus 5.5 (가장 정확, 기본)</option>
-        <option value="claude-sonnet-5-5">Claude Sonnet 5.5 (약 절반 비용)</option>
+        <option value="claude-sonnet-5-5">Claude Sonnet 5.5 (더 빠르고 약 절반 비용)</option>
       </select>
       <label for="ef">분석 깊이</label>
       <select id="ef"><option value="low">빠르게</option><option value="medium">보통 (기본)</option><option value="high">꼼꼼하게</option></select>
