@@ -108,7 +108,7 @@ const ANALYSIS_SCHEMA = {
   },
 };
 
-const SYSTEM_PROMPT = `당신은 중1~고3 수학 개별 교습 학원의 선생님을 돕는 학습 코치입니다.
+const SYSTEM_PROMPT = `당신은 초5~고3 수학 개별 교습 학원의 선생님을 돕는 학습 코치입니다.
 학생이 선생님에게 질문하러 와서 나눈 대화를 받아쓴 글을 읽고, 학생의 약점과 선생님이 쓸 티칭 방식을 정리합니다.
 
 원칙:
@@ -129,7 +129,7 @@ function loadSdk() {
   return sdkPromise;
 }
 
-export async function analyze({ transcript, studentCode, grade, history }, settings) {
+export async function analyze({ transcript, studentCode, grade, level, history }, settings) {
   if (!settings.anthropicKey) throw new Error('설정에서 Anthropic(Claude) API 키를 먼저 입력해 주세요.');
   if (!transcript || transcript.length < 5) throw new Error('받아쓴 내용이 너무 짧아서 분석할 수 없어요.');
   const { default: Anthropic } = await loadSdk();
@@ -138,7 +138,7 @@ export async function analyze({ transcript, studentCode, grade, history }, setti
   const historyText = history && history.length
     ? history.map(h => `- ${h.date} ${h.unit || ''}: ${h.points.join(' / ')}`).join('\n')
     : '(이전 기록 없음)';
-  const userText = `학생: ${studentCode} (${grade})
+  const userText = `학생: ${studentCode} (${grade}${level ? ', 현재 진도 ' + level : ''})
 
 이 학생의 최근 기록:
 ${historyText}
@@ -214,7 +214,7 @@ const REPORT_SCHEMA = {
   },
 };
 
-const REPORT_PROMPT = `당신은 중1~고3 수학 개별 교습 학원의 선생님을 돕는 학습 코치입니다.
+const REPORT_PROMPT = `당신은 초5~고3 수학 개별 교습 학원의 선생님을 돕는 학습 코치입니다.
 하루 동안 학생들이 질문하러 와서 나눈 대화의 분석 기록을 모아 선생님용 하루 리포트를 씁니다.
 
 원칙:

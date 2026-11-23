@@ -6,7 +6,7 @@ const titleEl = document.getElementById('title');
 const backBtn = document.getElementById('nav-back');
 const settingsBtn = document.getElementById('nav-settings');
 
-const GRADES = ['중1', '중2', '중3', '고1', '고2', '고3'];
+const GRADES = ['초5', '초6', '중1', '중2', '중3', '고1', '고2', '고3'];
 const running = new Set(); // 분석 중인 기록 id
 
 // ---------- 공통 ----------
@@ -50,6 +50,7 @@ async function route() {
     else if (name === 'session') await showSession(arg);
     else if (name === 'settings') showSettings();
     else if (name === 'add') showAddStudent(arg);
+    else if (name === 'import') showImport();
     else if (name === 'report') await showReport(arg || dayOf(Date.now()));
     else await showHome();
   } catch (e) {
@@ -72,9 +73,9 @@ async function showHome() {
     ${!s.openaiKey || !s.anthropicKey ? `<div class="warn">처음 쓰시나요? <a href="#settings">설정</a>에서 API 키 두 개를 먼저 입력해 주세요.</div>` : ''}
     <h2>누가 질문하러 왔나요?</h2>
     ${list.length ? `<div class="grid">${list.map(st => `
-      <button class="student" data-id="${st.id}">${esc(st.name)}<small>${esc(st.grade)}</small></button>`).join('')}</div>`
+      <button class="student" data-id="${st.id}">${esc(st.name)}<small>${esc(st.grade)}${st.level ? ' · ' + esc(st.level) : ''}</small></button>`).join('')}</div>`
       : `<p class="muted">아직 등록한 학생이 없어요.</p>`}
-    <div class="row" style="margin-top:12px"><a class="btn" href="#add">+ 학생 추가</a></div>
+    <div class="row" style="margin-top:12px"><a class="btn" href="#add">+ 학생 추가</a><a class="btn" href="#import">명단 한꺼번에 넣기</a></div>
     <h2>오늘 기록 <span class="muted">${todays.length}건</span></h2>
     <a class="btn primary block" href="#report/${today}" style="margin-bottom:12px">하루 마감 · 오늘 리포트</a>
     <div class="card">${todays.length ? todays.map(se => `
@@ -101,7 +102,8 @@ async function showAddStudent(editId) {
     <div class="card">
       <label for="nm">이름</label><input id="nm" autocomplete="off" value="${esc(editing?.name || '')}">
       <label for="gr">학년</label>
-      <select id="gr">${GRADES.map(g => `<option ${editing?.grade === g ? 'selected' : ''}>${g}</option>`).join('')}</select>
+      <select id="gr">${GRADES.map(g => `<option ${(editing?.grade || '중1') === g ? 'selected' : ''}>${g}</option>`).join('')}</select>
+      <label for="lv">현재 진도 (선택, 예: 중3-1)</label><input id="lv" autocomplete="off" value="${esc(editing?.level || '')}">
       <p class="muted">이름은 이 휴대폰에만 저장되고, 분석할 때는 학생 번호만 보내요.</p>
       <button class="btn primary block" id="save">저장</button>
     </div>`;
@@ -109,15 +111,60 @@ async function showAddStudent(editId) {
   view.querySelector('#save').onclick = async () => {
     const name = view.querySelector('#nm').value.trim();
     const grade = view.querySelector('#gr').value;
+    const level = view.querySelector('#lv').value.trim();
     if (!name) { toast('이름을 입력해 주세요'); return; }
     if (editing) {
-      await db.put('students', { ...editing, name, grade });
+      await db.put('students', { ...editing, name, grade, level });
       go('#student/' + editing.id);
     } else {
-      await db.put('students', { id: uid('st'), code: await nextStudentCode(), name, grade, createdAt: Date.now() });
+      await db.put('students', { id: uid('st'), code: await nextStudentCode(), name, grade, level, createdAt: Date.now() });
       toast(name + ' 학생을 추가했어요');
       go('#home');
     }
+  };
+}
+
+// ---------- 명단 한꺼번에 넣기 ----------
+function normGrade(g) {
+  g = String(g || '').replace(/\s/g, '');
+  let m = g.match(/^(초|중|고)(?:등학교)?(\d)/);
+  if (m) return m[1] + m[2];
+  return '';
+}
+function parseRoster(text) {
+  return text.split(/\r?\n/).map(l => l.trim()).filter(Boolean).map(l => {
+    const [name, grade, level] = l.split(/[,\t]/).map(x => (x || '').trim());
+    return { name, grade: normGrade(grade), level: level || '' };
+  }).filter(r => r.name);
+}
+async function showImport() {
+  setHeader('명단 한꺼번에 넣기', '#home');
+  view.innerHTML = `
+    <div class="card">
+      <p style="margin-top:0">한 줄에 한 명씩 <strong>이름, 학년, 진도</strong> 순서로 붙여넣어 주세요. 진도는 비워도 돼요.</p>
+      <p class="muted">예: 김민수, 중학교 2학년, 중2-1</p>
+      <textarea id="roster" style="min-height:220px" placeholder="김민수, 중2, 중2-1"></textarea>
+      <div class="muted" id="preview" style="margin:8px 0"></div>
+      <button class="btn primary block" id="go" disabled>가져오기</button>
+    </div>`;
+  const ta = view.querySelector('#roster'), pv = view.querySelector('#preview'), goBtn = view.querySelector('#go');
+  const existing = new Set((await db.all('students')).map(s => s.name));
+  const update = () => {
+    const rows = parseRoster(ta.value);
+    const fresh = rows.filter(r => !existing.has(r.name));
+    const bad = fresh.filter(r => !r.grade);
+    pv.textContent = rows.length ? `${rows.length}명 중 새로 넣을 학생 ${fresh.length}명` + (rows.length - fresh.length ? `, 이미 있는 이름 ${rows.length - fresh.length}명은 건너뜀` : '') + (bad.length ? `, 학년을 못 읽은 ${bad.length}명은 중1로 넣음` : '') : '';
+    goBtn.disabled = !fresh.length;
+  };
+  ta.addEventListener('input', update);
+  goBtn.onclick = async () => {
+    goBtn.disabled = true;
+    const rows = parseRoster(ta.value).filter(r => !existing.has(r.name));
+    for (const r of rows) {
+      await db.put('students', { id: uid('st'), code: await nextStudentCode(), name: r.name, grade: r.grade || '중1', level: r.level, createdAt: Date.now() });
+      existing.add(r.name);
+    }
+    toast(`${rows.length}명을 넣었어요`); go('#home');
   };
 }
 
@@ -132,7 +179,7 @@ async function showStudent(id) {
   const tags = Object.entries(tagCount).sort((a, b) => b[1] - a[1]);
   view.innerHTML = `
     <div class="card">
-      <div class="row" style="justify-content:space-between"><div><strong>${esc(st.name)}</strong> <span class="muted">${esc(st.grade)} · ${esc(st.code)}</span></div>
+      <div class="row" style="justify-content:space-between"><div><strong>${esc(st.name)}</strong> <span class="muted">${esc(st.grade)}${st.level ? ' · 진도 ' + esc(st.level) : ''} · ${esc(st.code)}</span></div>
       <a class="btn" href="#add/${st.id}">수정</a></div>
       ${tags.length ? `<div style="margin-top:8px">${tags.map(([t, n]) => `<span class="tag">${esc(t)} ${n}</span>`).join('')}</div>` : ''}
     </div>
@@ -278,7 +325,7 @@ async function runPipeline(id, { force } = {}) {
       const past = (await db.byIndex('sessions', 'studentId', se.studentId))
         .filter(x => x.id !== id && x.analysis).sort((a, b) => b.createdAt - a.createdAt).slice(0, 6)
         .map(x => ({ date: x.day, unit: x.analysis.unit, points: (x.analysis.weaknesses || []).map(w => w.point) }));
-      se.analysis = await analyze({ transcript: se.transcript, studentCode: st?.code || '학생', grade: st?.grade || '', history: past }, settings);
+      se.analysis = await analyze({ transcript: se.transcript, studentCode: st?.code || '학생', grade: st?.grade || '', level: st?.level || '', history: past }, settings);
       se.analyzedAt = Date.now();
     }
     se.stage = null; se.error = null;
@@ -451,7 +498,7 @@ async function showReport(day) {
     const groups = {};
     sessions.forEach(se => { (groups[se.studentId] ||= []).push(se); });
     const items = Object.entries(groups).map(([sid, list]) => ({
-      student: byId[sid]?.code || '학생', grade: byId[sid]?.grade || '',
+      student: byId[sid]?.code || '학생', grade: byId[sid]?.grade || '', level: byId[sid]?.level || '',
       today: list.map(se => ({ time: timeOf(se.createdAt), unit: se.unitOverride ?? se.analysis.unit, summary: se.analysis.summary,
         weaknesses: se.analysis.weaknesses, teacher_supplied: se.analysis.teacher_supplied, attitude: se.analysis.attitude,
         teaching: se.analysis.teaching.map(t => t.method), teacher_memo: se.memo || '' })),
