@@ -556,8 +556,8 @@ function showSettings() {
   view.querySelector('#cm').value = s.claudeModel;
   view.querySelector('#ef').value = s.effort;
   view.querySelector('#save').onclick = () => {
-    const ak = view.querySelector('#ak').value.replace(/\s+/g, '');
-    const ok = view.querySelector('#ok').value.replace(/\s+/g, '');
+    const ak = view.querySelector('#ak').value.replace(/[^\x21-\x7E]/g, '');
+    const ok = view.querySelector('#ok').value.replace(/[^\x21-\x7E]/g, '');
     if (ak && !ak.startsWith('sk-ant-')) { alert('Anthropic(Claude) 키는 sk-ant- 로 시작해요. console.anthropic.com의 API Keys에서 새 키를 만들 때 한 번만 보여 주는 긴 글자를 통째로 복사해 넣어 주세요.'); return; }
     if (ok && !ok.startsWith('sk-')) { alert('OpenAI 키는 sk- 로 시작해요. 키 전체를 복사해 넣어 주세요.'); return; }
     saveSettings({

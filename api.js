@@ -170,7 +170,7 @@ ${transcript}
 
 export function explainError(e) {
   const m = String(e?.message || e);
-  if (/Invalid bearer token|OAuth/i.test(m)) return m + '\n→ 설정의 Anthropic 키가 API 키가 아니에요. sk-ant-api03- 으로 시작하는 키를 console.anthropic.com에서 새로 만들어 넣어 주세요.';
+  if (/Invalid bearer token|OAuth/i.test(m)) return m + '\n→ 설정의 Anthropic 키가 맞지 않거나 일부만 들어갔어요. platform.claude.com의 API 키 화면에서 새 키를 만들어 처음 보여 주는 전체 글자를 넣어 주세요.';
   if (/401|authentication|invalid.*key|Incorrect API key/i.test(m)) return m + '\n→ API 키가 맞는지 설정에서 확인해 주세요.';
   if (/429|rate|quota|insufficient|credit/i.test(m)) return m + '\n→ 사용 한도나 충전 잔액을 확인해 주세요.';
   if (/Failed to fetch|NetworkError|Load failed/i.test(m)) return m + '\n→ 인터넷 연결을 확인해 주세요.';
